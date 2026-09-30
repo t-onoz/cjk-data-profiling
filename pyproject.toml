@@ -35,6 +35,8 @@ email = "18749921+t-onoz@users.noreply.github.com"
 
 [project.optional-dependencies]
 profiling = ["fg-data-profiling"]
+
+[dependency-groups]
 dev = [
     "mypy",
     "pyright",
@@ -103,6 +105,6 @@ skip_missing_interpreters = false
 description = "run unit and Matplotlib rendering tests with {base_python}"
 runner = "uv-venv-lock-runner"
 package = "wheel"
-extras = ["dev"]
+dependency_groups = ["dev"]
 uv_python_preference = "managed"
 commands = [["pytest", "-m", "not integration"]]

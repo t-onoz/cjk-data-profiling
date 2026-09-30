@@ -36,8 +36,21 @@ Language-specific values are `"ja"`, `"zh-cn"`, `"zh-tw"`, and `"ko"`.
 Use the additional `"mixed"` value only when a Noto Sans CJK font is
 installed; it requires one font that covers Japanese, Chinese, and Korean text.
 
+To prefer a different installed font, replace the candidate list for the
+relevant language before entering the context. The selected font must include
+the CJK characters used by the report.
+
+```python
+from cjk_data_profiling import FONT_CANDIDATES, cjk_data_profiling
+
+FONT_CANDIDATES["ja"] = ["Yu Gothic", "Meiryo"]
+
+with cjk_data_profiling("ja"):
+    ...
+```
+
 The context temporarily changes process-wide Matplotlib and WordCloud defaults.
-Concurrent use from multiple threads in the same process is not supported.
+*Concurrent use from multiple threads in the same process is not supported.*
 
 ## Testing
 
@@ -49,7 +62,8 @@ pytest -m integration
 Run the non-integration suite on every supported Python version locally:
 
 ```bash
-tox
+uv sync --group dev
+uv run tox
 ```
 
 `tox` obtains Python 3.11, 3.12, 3.13, and 3.14 through `uv`, then runs

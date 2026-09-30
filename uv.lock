@@ -283,6 +283,11 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+profiling = [
+    { name = "fg-data-profiling" },
+]
+
+[package.dev-dependencies]
 dev = [
     { name = "mypy" },
     { name = "pyright" },
@@ -291,23 +296,24 @@ dev = [
     { name = "tox" },
     { name = "tox-uv" },
 ]
-profiling = [
-    { name = "fg-data-profiling" },
-]
 
 [package.metadata]
 requires-dist = [
     { name = "fg-data-profiling", marker = "extra == 'profiling'" },
     { name = "matplotlib" },
-    { name = "mypy", marker = "extra == 'dev'" },
-    { name = "pyright", marker = "extra == 'dev'" },
-    { name = "pytest", marker = "extra == 'dev'" },
-    { name = "ruff", marker = "extra == 'dev'" },
-    { name = "tox", marker = "extra == 'dev'", specifier = ">=4" },
-    { name = "tox-uv", marker = "extra == 'dev'" },
     { name = "wordcloud" },
 ]
-provides-extras = ["profiling", "dev"]
+provides-extras = ["profiling"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy" },
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "ruff" },
+    { name = "tox", specifier = ">=4" },
+    { name = "tox-uv" },
+]
 
 [[package]]
 name = "cloudpickle"

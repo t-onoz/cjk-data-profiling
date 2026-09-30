@@ -198,6 +198,7 @@ def cjk_data_profiling(language: Language) -> Generator[None, None, None]:
         matplotlib.rcParams["font.sans-serif"] = original_sans_serif
         # Several CJK system fonts omit U+2212.  Use ASCII hyphen for negative
         # tick labels while the CJK compatibility patch is active.
+        # related: https://github.com/matplotlib/matplotlib/issues/27838
         matplotlib.rcParams["axes.unicode_minus"] = False
         yield
     finally:

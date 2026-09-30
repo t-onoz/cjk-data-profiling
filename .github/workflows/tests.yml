@@ -18,4 +18,4 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - uses: astral-sh/setup-uv@v6
       - name: Run unit and rendering tests
-        run: uv run --extra dev pytest -m "not integration"
+        run: uv run --group dev pytest -m "not integration"
