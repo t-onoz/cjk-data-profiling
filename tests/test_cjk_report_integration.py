@@ -1,0 +1,137 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, cast
+
+import pytest
+from fontTools.ttLib import (  # type: ignore[import-untyped]
+    TTCollection,
+    TTFont,
+    TTLibFileIsCollectionError,
+)
+from wordcloud import WordCloud  # type: ignore[reportMissingImports]
+
+import cjk_data_profiling as module
+
+REPORT_OUTPUT_DIRECTORY = Path("test_output/integration-reports")
+
+CJK_CASES: list[tuple[module.Language, str, tuple[str, str, str]]] = [
+    (
+        "ja",
+        "\u6771\u4eac \u5927\u962a \u4eac\u90fd \u9ad9 \ufa11",
+        ("\u58f2\u4e0a", "\u5229\u76ca", "\u9867\u5ba2\u6570"),
+    ),
+    (
+        "zh-cn",
+        "\u5317\u4eac \u4e0a\u6d77 \u5e7f\u5dde \u6c49\u5b57 \u6570\u636e",
+        ("\u9500\u552e\u989d", "\u5229\u6da6", "\u5ba2\u6237\u6570"),
+    ),
+    (
+        "ko",
+        "\uc11c\uc6b8 \ubd80\uc0b0 \ub300\uad6c \ud55c\uae00 \ub370\uc774\ud130",
+        ("\ub9e4\ucd9c", "\uc774\uc775", "\uace0\uac1d\uc218"),
+    ),
+    (
+        "mixed",
+        "\u6771\u4eac \u5317\u4eac \uc11c\uc6b8 \ud55c\uae00 \u6570\u636e",
+        ("\u58f2\u4e0a", "\u9500\u552e\u989d", "\ub9e4\ucd9c"),
+    ),
+]
+
+
+def _font_codepoints(font_path: str) -> set[int]:
+    try:
+        font = TTFont(font_path)
+    except TTLibFileIsCollectionError:
+        # WordCloud opens a TrueType Collection with its default font index (0).
+        font = TTCollection(font_path).fonts[0]
+
+    cmap = cast(Any, font["cmap"])
+    return {
+        codepoint
+        for table in cmap.tables
+        if table.isUnicode()
+        for codepoint in table.cmap
+    }
+
+
+def _wordcloud_font_path(language: module.Language, text: str) -> str:
+    try:
+        _, font_path = module._find_fonts(language)
+    except RuntimeError:
+        pytest.skip(f"A CJK font is required for language={language!r}")
+
+    missing_characters = [
+        character
+        for character in text
+        if not character.isspace() and ord(character) not in _font_codepoints(font_path)
+    ]
+    assert not missing_characters, "The WordCloud font lacks glyphs for: " + "".join(
+        missing_characters
+    )
+    return font_path
+
+
+@pytest.mark.parametrize(
+    ("language", "text", "numeric_columns"),
+    CJK_CASES,
+    ids=["japanese", "simplified-chinese", "korean", "mixed-cjk"],
+)
+def test_wordcloud_font_covers_cjk_text(
+    language: module.Language,
+    text: str,
+    numeric_columns: tuple[str, str, str],
+) -> None:
+    _wordcloud_font_path(language, text)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("profiling_module", ["ydata_profiling", "data_profiling"])
+@pytest.mark.parametrize(
+    ("language", "text", "numeric_columns"),
+    CJK_CASES,
+    ids=["japanese", "simplified-chinese", "korean", "mixed-cjk"],
+)
+def test_profile_report_renders_cjk_text(
+    profiling_module: str,
+    language: module.Language,
+    text: str,
+    numeric_columns: tuple[str, str, str],
+) -> None:
+    pandas = pytest.importorskip("pandas")
+    profiling = pytest.importorskip(profiling_module)
+    wordcloud_font_path = _wordcloud_font_path(language, text)
+
+    values = list(range(1, 31))
+    dataframe = pandas.DataFrame(
+        {
+            numeric_columns[0]: values,
+            numeric_columns[1]: [value * 2 + value % 3 for value in values],
+            numeric_columns[2]: [value * 3 - value % 5 for value in values],
+            "CJK text": [text] * len(values),
+        }
+    )
+    REPORT_OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    report_path = REPORT_OUTPUT_DIRECTORY / f"{profiling_module}-{language}.html"
+    wordcloud_path = REPORT_OUTPUT_DIRECTORY / f"{profiling_module}-{language}.png"
+
+    with module.cjk_data_profiling(language):
+        report = profiling.ProfileReport(
+            dataframe,
+            title=f"CJK font integration check: {language}",
+            vars={"cat": {"words": True, "characters": True}},
+            correlations={"pearson": {"calculate": True}},
+            interactions={"continuous": False},
+        )
+        report.to_file(report_path)
+        WordCloud(
+            width=800,
+            height=400,
+            background_color="white",
+            font_path=wordcloud_font_path,
+        ).generate(" ".join([text] * len(values))).to_file(wordcloud_path)
+
+    html = report_path.read_text(encoding="utf-8")
+    assert text in html
+    assert all(column in html for column in numeric_columns)
+    assert wordcloud_path.is_file()
