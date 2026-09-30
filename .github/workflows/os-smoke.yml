@@ -1,0 +1,45 @@
+name: OS smoke test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-latest
+          - ubuntu-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.11"
+
+      # Ubuntu minimal imageにはCJKフォントがないことがある
+      - name: Install CJK fonts on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk
+
+      - name: Install project
+        run: uv sync --locked
+
+      - name: Run smoke tests
+        run: uv run pytest tests/test_os_smoke.py
+
+      - name: Upload rendered images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cjk-render-${{ matrix.os }}
+          path: test_output/
