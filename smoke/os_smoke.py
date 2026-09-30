@@ -22,6 +22,28 @@ CASES: list[tuple[Language, str]] = [
 ]
 
 
+from matplotlib import font_manager
+
+
+def print_cjk_fonts() -> None:
+    keywords = (
+        "pingfang",
+        "songti",
+        "heiti",
+        "hiragino",
+        "gothic",
+        "yahei",
+        "jhenghei",
+        "malgun",
+        "noto",
+    )
+
+    for font in font_manager.fontManager.ttflist:
+        name = font.name.lower()
+        if any(key in name for key in keywords):
+            print(font.name, "->", font.fname)
+
+
 def render_case(language: Language, text: str) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -46,6 +68,7 @@ def render_case(language: Language, text: str) -> None:
 
 
 def main() -> None:
+    print_cjk_fonts()
     failed: list[tuple[Language, Exception]] = []
 
     for language, text in CASES:
