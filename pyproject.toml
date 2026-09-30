@@ -33,6 +33,11 @@ dependencies = [
 name = "t-onoz"
 email = "18749921+t-onoz@users.noreply.github.com"
 
+[project.urls]
+Homepage = "https://github.com/t-onoz/cjk-data-profiling"
+Repository = "https://github.com/t-onoz/cjk-data-profiling"
+Issues = "https://github.com/t-onoz/cjk-data-profiling/issues"
+
 [project.optional-dependencies]
 profiling = ["fg-data-profiling"]
 
