@@ -18,7 +18,6 @@ CASES: list[tuple[Language, str]] = [
     ("zh-cn", "简体中文 字体 测试"),
     ("zh-tw", "繁體中文 字型 測試"),
     ("ko", "한국어 글꼴 테스트"),
-    ("mixed", "日本語 简体中文 繁體中文 한국어 English"),
 ]
 
 

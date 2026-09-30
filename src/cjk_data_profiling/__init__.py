@@ -26,12 +26,17 @@ FONT_CANDIDATES: dict[Language, list[str]] = {
     "zh-cn": [
         "Microsoft YaHei",
         "PingFang SC",
+        "Heiti SC",
+        "Hiragino Sans GB",
+        "Songti SC",
         "Noto Sans CJK SC",
         "Noto Sans SC",
     ],
     "zh-tw": [
         "Microsoft JhengHei",
         "PingFang TC",
+        "Heiti TC",
+        "Songti TC",
         "Noto Sans CJK TC",
         "Noto Sans TC",
     ],
