@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from typing import Any, Literal, cast
 
 import matplotlib
-import wordcloud.wordcloud as wordcloud_module  # type: ignore[reportMissingImports]
+import wordcloud.wordcloud as wordcloud_module
 from matplotlib import font_manager
 
 Language = Literal["ja", "zh-cn", "zh-tw", "ko", "mixed"]
@@ -166,7 +166,8 @@ def cjk_data_profiling(language: Language) -> Generator[None, None, None]:
     Matplotlib and WordCloud settings are process-global, so concurrent use
     from multiple threads in the same process is not supported.
     """
-
+    if language not in FONT_CANDIDATES:
+        raise ValueError(f"Unsupported language: {language!r}")
     families, wordcloud_font_path = _find_fonts(language)
     validators = cast(dict[str, FontValidator], matplotlib.rcParams.validate)
 

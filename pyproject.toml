@@ -22,6 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "matplotlib",
@@ -39,6 +40,8 @@ dev = [
     "pyright",
     "pytest",
     "ruff",
+    "tox>=4",
+    "tox-uv",
 ]
 [build-system]
 requires = ["uv_build>=0.12.20,<0.13"]
@@ -91,3 +94,15 @@ reportMissingTypeStubs = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["integration: runs against an installed profiling library"]
+
+[tool.tox]
+env_list = ["py311", "py312", "py313", "py314"]
+skip_missing_interpreters = false
+
+[tool.tox.env_run_base]
+description = "run unit and Matplotlib rendering tests with {base_python}"
+runner = "uv-venv-lock-runner"
+package = "wheel"
+extras = ["dev"]
+uv_python_preference = "managed"
+commands = [["pytest", "-m", "not integration"]]

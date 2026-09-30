@@ -16,6 +16,8 @@ htmlcov/
 .pytest_cache/
 .ruff_cache/
 test_output/
+.tox/
+Python/
 
 # Virtual environments
 .venv

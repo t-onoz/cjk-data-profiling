@@ -46,5 +46,15 @@ pytest
 pytest -m integration
 ```
 
+Run the non-integration suite on every supported Python version locally:
+
+```bash
+tox
+```
+
+`tox` obtains Python 3.11, 3.12, 3.13, and 3.14 through `uv`, then runs
+`pytest -m "not integration"`. Report-generation integration tests remain
+opt-in.
+
 Integration reports and WordCloud images are written to
 `test_output/integration-reports/` and are ignored by Git.
