@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, cast
 
@@ -14,6 +15,7 @@ from wordcloud import WordCloud  # type: ignore[reportMissingImports]
 import cjk_data_profiling as module
 
 REPORT_OUTPUT_DIRECTORY = Path("test_output/integration-reports")
+INTERACTION_COLUMNS = ("a b", "a-b", "\u6e29\u5ea6", "\u6e7f\u5ea6")
 
 CJK_CASES: list[tuple[module.Language, str, tuple[str, str, str]]] = [
     (
@@ -135,3 +137,60 @@ def test_profile_report_renders_cjk_text(
     assert text in html
     assert all(column in html for column in numeric_columns)
     assert wordcloud_path.is_file()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("profiling_module", ["ydata_profiling", "data_profiling"])
+def test_profile_report_has_unique_interaction_selectors(
+    profiling_module: str,
+) -> None:
+    """Generate an inspectable report for CJK and colliding interaction columns."""
+
+    pandas = pytest.importorskip("pandas")
+    profiling = pytest.importorskip(profiling_module)
+
+    try:
+        module._find_fonts("ja")
+    except RuntimeError:
+        pytest.skip("A Japanese CJK font is required for this integration test")
+
+    values = list(range(1, 31))
+    dataframe = pandas.DataFrame(
+        {
+            "a b": values,
+            "a-b": [value * 2 + value % 3 for value in values],
+            "\u6e29\u5ea6": [value * 3 - value % 5 for value in values],
+            "\u6e7f\u5ea6": [value * 5 + value % 7 for value in values],
+        }
+    )
+    REPORT_OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    report_path = (
+        REPORT_OUTPUT_DIRECTORY / f"{profiling_module}-interaction-selectors.html"
+    )
+
+    with module.cjk_data_profiling("ja"):
+        report = profiling.ProfileReport(
+            dataframe,
+            title="CJK interaction selector integration check",
+            interactions={"continuous": True, "targets": list(INTERACTION_COLUMNS)},
+        )
+        report.to_file(report_path)
+
+    html = report_path.read_text(encoding="utf-8")
+    expected_anchor_ids = {
+        f"interactions_{module._dom_id_slugify(x_column)}"
+        for x_column in INTERACTION_COLUMNS
+    }
+    expected_anchor_ids.update(
+        f"interactions_{module._dom_id_slugify(x_column)}_"
+        f"{module._dom_id_slugify(y_column)}"
+        for x_column in INTERACTION_COLUMNS
+        for y_column in INTERACTION_COLUMNS
+    )
+
+    assert all(column in html for column in INTERACTION_COLUMNS)
+    assert expected_anchor_ids <= {
+        match.group(0)
+        for match in re.finditer(r"interactions_[0-9a-f_]+", html)
+    }
+    assert len(expected_anchor_ids) == 20

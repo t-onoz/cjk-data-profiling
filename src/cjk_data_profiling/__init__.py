@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from typing import Any, Literal, cast
+from importlib import import_module
+from types import ModuleType
+from typing import Any, Literal, Protocol, cast
 
 import matplotlib
 import wordcloud.wordcloud as wordcloud_module
@@ -79,6 +81,68 @@ MATPLOTLIB_FINAL_FALLBACKS = [
 
 
 FontValidator = Callable[..., list[str]]
+
+
+class _ReportStructureModule(Protocol):
+    slugify: Callable[..., str]
+
+
+def _dom_id_slugify(value: object) -> str:
+    """Encode a column name losslessly for use in a DOM identifier."""
+
+    return str(value).encode("utf-8").hex()
+
+
+def _report_structure_module() -> ModuleType | None:
+    """Return the installed profiling package's report-structure module.
+
+    ``fg-data-profiling`` exposes this module as ``data_profiling``. Older
+    ``ydata-profiling`` releases expose the same structure from
+    ``ydata_profiling`` instead. Current fg-data-profiling installations may
+    ship a compatibility ``ydata_profiling`` shim, so prefer the fg module and
+    avoid importing that deprecated shim when it is not needed.
+    """
+
+    module_names = (
+        "data_profiling.report.structure.report",
+        "ydata_profiling.report.structure.report",
+    )
+    for module_name in module_names:
+        try:
+            return import_module(module_name)
+        except ModuleNotFoundError as error:
+            # Only treat the target profiling package being absent as optional.
+            # A missing dependency inside an installed package remains an error.
+            if module_name.startswith(f"{error.name}."):
+                continue
+            raise
+    return None
+
+
+@contextmanager
+def _patch_report_slugify() -> Generator[None, None, None]:
+    """Temporarily make report-structure DOM IDs collision-free.
+
+    This intentionally changes only the ``slugify`` reference imported by the
+    report-structure module. It does not modify the profiling package's
+    dataframe helper, which is also used for non-DOM identifiers.
+    """
+
+    report_module = _report_structure_module()
+    if report_module is None:
+        yield
+        return
+
+    slugify_module = cast(_ReportStructureModule, report_module)
+    original_slugify = slugify_module.slugify
+    if not callable(original_slugify):
+        raise RuntimeError("The profiling report module has no callable slugify.")
+
+    slugify_module.slugify = _dom_id_slugify
+    try:
+        yield
+    finally:
+        slugify_module.slugify = original_slugify
 
 
 class _NotoSansJPWeightWarningFilter(logging.Filter):
@@ -164,6 +228,10 @@ def cjk_data_profiling(language: Language) -> Generator[None, None, None]:
     This works around data-profiling overriding Matplotlib's
     ``font.sans-serif`` setting internally.
 
+    It also temporarily replaces the profiling report module's ``slugify``
+    reference so interaction DOM IDs remain unique for CJK and other column
+    names that would otherwise collide.
+
     WordCloud's default font is also temporarily replaced.
     Explicit ``font_path`` arguments passed to WordCloud still take
     precedence.
@@ -205,7 +273,8 @@ def cjk_data_profiling(language: Language) -> Generator[None, None, None]:
         # tick labels while the CJK compatibility patch is active.
         # related: https://github.com/matplotlib/matplotlib/issues/27838
         matplotlib.rcParams["axes.unicode_minus"] = False
-        yield
+        with _patch_report_slugify():
+            yield
     finally:
         # Restore the validator before restoring rcParams.  Nested finally
         # blocks ensure a failed restoration cannot skip a later one.

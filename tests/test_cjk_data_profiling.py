@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from types import ModuleType
 from typing import Any, cast
 
 import matplotlib
@@ -16,6 +17,79 @@ class _MessageCapturingHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         self.messages.append(record.getMessage())
+
+
+@pytest.mark.parametrize("value", ["a b", "a-b", "温度", "湿度"])
+def test_dom_id_slugify_is_non_empty_and_distinct(value: str) -> None:
+    encoded_values = {
+        module._dom_id_slugify(column)
+        for column in ("a b", "a-b", "温度", "湿度")
+    }
+
+    assert module._dom_id_slugify(value)
+    assert len(encoded_values) == 4
+
+
+def test_report_structure_module_falls_back_to_ydata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ydata_report = ModuleType("ydata_report")
+    requested_modules: list[str] = []
+
+    def import_only_ydata(module_name: str) -> ModuleType:
+        requested_modules.append(module_name)
+        if module_name.startswith("data_profiling"):
+            error = ModuleNotFoundError()
+            error.name = "data_profiling"
+            raise error
+        return ydata_report
+
+    monkeypatch.setattr(module, "import_module", import_only_ydata)
+
+    assert module._report_structure_module() is ydata_report
+    assert requested_modules == [
+        "data_profiling.report.structure.report",
+        "ydata_profiling.report.structure.report",
+    ]
+
+
+def test_report_slugify_patch_is_scoped_and_restored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    report_module = cast(Any, ModuleType("report"))
+
+    def original_slugify(value: object) -> str:
+        return f"original-{value}"
+
+    report_module.slugify = original_slugify
+    monkeypatch.setattr(module, "_report_structure_module", lambda: report_module)
+
+    with module._patch_report_slugify():
+        assert report_module.slugify("温度") == "e6b8a9e5baa6"
+
+        with module._patch_report_slugify():
+            assert report_module.slugify("湿度") == "e6b9bfe5baa6"
+
+        assert report_module.slugify("温度") == "e6b8a9e5baa6"
+
+    assert report_module.slugify is original_slugify
+
+
+def test_report_slugify_patch_restores_after_body_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    report_module = cast(Any, ModuleType("report"))
+
+    def original_slugify(value: object) -> str:
+        return str(value)
+
+    report_module.slugify = original_slugify
+    monkeypatch.setattr(module, "_report_structure_module", lambda: report_module)
+
+    with pytest.raises(ValueError, match="expected"), module._patch_report_slugify():
+        raise ValueError("expected")
+
+    assert report_module.slugify is original_slugify
 
 
 def test_find_fonts_preserves_candidate_order_and_deduplicates(

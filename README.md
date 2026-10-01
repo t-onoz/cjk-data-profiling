@@ -1,7 +1,9 @@
 # cjk-data-profiling
 
-Temporary CJK font support for Matplotlib and WordCloud used by
-`ydata-profiling` and `fg-data-profiling`.
+`cjk-data-profiling` is a context-manager package for generating
+`ydata-profiling` / `fg-data-profiling` reports with Japanese, Chinese, or
+Korean text. It temporarily configures CJK fonts for Matplotlib and WordCloud
+and prevents report interaction DOM-ID collisions caused by column names.
 
 ## Installation
 
@@ -49,8 +51,15 @@ with cjk_data_profiling("ja"):
     ...
 ```
 
-The context temporarily changes process-wide Matplotlib and WordCloud defaults.
-*Concurrent use from multiple threads in the same process is not supported.*
+The context temporarily changes process-wide Matplotlib and WordCloud defaults,
+as well as the installed profiling package's report-structure DOM-ID helper.
+*Concurrent report generation from multiple threads in the same process is not
+supported.* Both this package and `fg-data-profiling` temporarily modify
+Matplotlib global state while rendering. Do not make this context active in
+overlapping threads, including with different languages. If reports must be
+generated concurrently, use separate processes. For threaded applications,
+serialize the complete report-generation operation with an application-level
+lock instead.
 
 ## Testing
 
@@ -68,7 +77,10 @@ uv run tox
 
 `tox` obtains Python 3.11, 3.12, 3.13, and 3.14 through `uv`, then runs
 `pytest -m "not integration"`. Report-generation integration tests remain
-opt-in.
+opt-in. The interaction-selector integration test writes
+`*-interaction-selectors.html` files to `test_output/integration-reports/`.
+Open one in a browser to manually confirm that every Interaction selector,
+including `"a b"`, `"a-b"`, and CJK column names, displays its matching plot.
 
 Integration reports and WordCloud images are written to
 `test_output/integration-reports/` and are ignored by Git.
