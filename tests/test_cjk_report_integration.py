@@ -29,6 +29,11 @@ CJK_CASES: list[tuple[module.Language, str, tuple[str, str, str]]] = [
         ("\u9500\u552e\u989d", "\u5229\u6da6", "\u5ba2\u6237\u6570"),
     ),
     (
+        "zh-tw",
+        "\u81fa\u5317 \u9ad8\u96c4 \u53f0\u7063 \u6f22\u5b57 \u8cc7\u6599",
+        ("\u92b7\u552e\u984d", "\u5229\u6f64", "\u5ba2\u6236\u6578"),
+    ),
+    (
         "ko",
         "\uc11c\uc6b8 \ubd80\uc0b0 \ub300\uad6c \ud55c\uae00 \ub370\uc774\ud130",
         ("\ub9e4\ucd9c", "\uc774\uc775", "\uace0\uac1d\uc218"),
@@ -77,7 +82,13 @@ def _wordcloud_font_path(language: module.Language, text: str) -> str:
 @pytest.mark.parametrize(
     ("language", "text", "numeric_columns"),
     CJK_CASES,
-    ids=["japanese", "simplified-chinese", "korean", "mixed-cjk"],
+    ids=[
+        "japanese",
+        "simplified-chinese",
+        "traditional-chinese",
+        "korean",
+        "mixed-cjk",
+    ],
 )
 def test_wordcloud_font_covers_cjk_text(
     language: module.Language,
@@ -92,7 +103,13 @@ def test_wordcloud_font_covers_cjk_text(
 @pytest.mark.parametrize(
     ("language", "text", "numeric_columns"),
     CJK_CASES,
-    ids=["japanese", "simplified-chinese", "korean", "mixed-cjk"],
+    ids=[
+        "japanese",
+        "simplified-chinese",
+        "traditional-chinese",
+        "korean",
+        "mixed-cjk",
+    ],
 )
 def test_profile_report_renders_cjk_text(
     profiling_module: str,

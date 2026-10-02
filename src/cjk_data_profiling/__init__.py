@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Generator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from importlib import import_module
 from types import ModuleType
 from typing import Any, Literal, Protocol, cast
 
 import matplotlib
-import wordcloud.wordcloud as wordcloud_module
+import wordcloud.wordcloud as wordcloud_module  # type: ignore[reportMissingImports]
 from matplotlib import font_manager
 
 Language = Literal["ja", "zh-cn", "zh-tw", "ko", "mixed"]
@@ -222,28 +222,10 @@ def _find_fonts(language: Language) -> tuple[list[str], str]:
 
 
 @contextmanager
-def cjk_data_profiling(language: Language) -> Generator[None, None, None]:
-    """Temporarily enable CJK fonts for data-profiling plots.
+def _patch_matplotlib(families: list[str]) -> Generator[None, None, None]:
+    """Temporarily configure Matplotlib to prefer the supplied CJK fonts."""
 
-    This works around data-profiling overriding Matplotlib's
-    ``font.sans-serif`` setting internally.
-
-    It also temporarily replaces the profiling report module's ``slugify``
-    reference so interaction DOM IDs remain unique for CJK and other column
-    names that would otherwise collide.
-
-    WordCloud's default font is also temporarily replaced.
-    Explicit ``font_path`` arguments passed to WordCloud still take
-    precedence.
-
-    Matplotlib and WordCloud settings are process-global, so concurrent use
-    from multiple threads in the same process is not supported.
-    """
-    if language not in FONT_CANDIDATES:
-        raise ValueError(f"Unsupported language: {language!r}")
-    families, wordcloud_font_path = _find_fonts(language)
     validators = cast(dict[str, FontValidator], matplotlib.rcParams.validate)
-
     if "font.sans-serif" not in validators:
         raise RuntimeError(
             "The installed Matplotlib version does not expose the expected "
@@ -253,7 +235,6 @@ def cjk_data_profiling(language: Language) -> Generator[None, None, None]:
     original_validator = validators["font.sans-serif"]
     original_sans_serif = list(matplotlib.rcParams["font.sans-serif"])
     original_unicode_minus = matplotlib.rcParams["axes.unicode_minus"]
-    original_wordcloud_font_path = cast(str, wordcloud_module.FONT_PATH)
 
     def validate_font_sans_serif(value: Any) -> list[str]:
         requested = original_validator(value)
@@ -265,16 +246,13 @@ def cjk_data_profiling(language: Language) -> Generator[None, None, None]:
 
     try:
         validators["font.sans-serif"] = validate_font_sans_serif
-        wordcloud_module.FONT_PATH = wordcloud_font_path
-
         # Apply the patched validator to the current setting as well.
         matplotlib.rcParams["font.sans-serif"] = original_sans_serif
         # Several CJK system fonts omit U+2212.  Use ASCII hyphen for negative
         # tick labels while the CJK compatibility patch is active.
         # related: https://github.com/matplotlib/matplotlib/issues/27838
         matplotlib.rcParams["axes.unicode_minus"] = False
-        with _patch_report_slugify():
-            yield
+        yield
     finally:
         # Restore the validator before restoring rcParams.  Nested finally
         # blocks ensure a failed restoration cannot skip a later one.
@@ -282,9 +260,62 @@ def cjk_data_profiling(language: Language) -> Generator[None, None, None]:
             validators["font.sans-serif"] = original_validator
         finally:
             try:
-                try:
-                    matplotlib.rcParams["font.sans-serif"] = original_sans_serif
-                finally:
-                    matplotlib.rcParams["axes.unicode_minus"] = original_unicode_minus
+                matplotlib.rcParams["font.sans-serif"] = original_sans_serif
             finally:
-                wordcloud_module.FONT_PATH = original_wordcloud_font_path
+                matplotlib.rcParams["axes.unicode_minus"] = original_unicode_minus
+
+
+@contextmanager
+def _patch_wordcloud(font_path: str) -> Generator[None, None, None]:
+    """Temporarily set WordCloud's process-wide default font."""
+
+    original_font_path = cast(str, wordcloud_module.FONT_PATH)
+    try:
+        wordcloud_module.FONT_PATH = font_path
+        yield
+    finally:
+        wordcloud_module.FONT_PATH = original_font_path
+
+
+@contextmanager
+def cjk_data_profiling(
+    language: Language,
+    *,
+    enable_matplotlib: bool = True,
+    enable_wordcloud: bool = True,
+    enable_slugify: bool = True,
+) -> Generator[None, None, None]:
+    """Temporarily enable selected CJK compatibility patches for reports.
+
+    This works around data-profiling overriding Matplotlib's
+    ``font.sans-serif`` setting internally.
+
+    By default it configures Matplotlib, WordCloud, and the profiling report
+    module's ``slugify`` reference.  Each patch can be disabled independently
+    with the corresponding keyword-only ``enable_*`` argument.
+
+    WordCloud's default font is also temporarily replaced.
+    Explicit ``font_path`` arguments passed to WordCloud still take
+    precedence.
+
+    Matplotlib and WordCloud settings are process-global, so concurrent use
+    from multiple threads in the same process is not supported.
+    """
+    if language not in FONT_CANDIDATES:
+        raise ValueError(f"Unsupported language: {language!r}")
+
+    families: list[str] | None = None
+    wordcloud_font_path: str | None = None
+    if enable_matplotlib or enable_wordcloud:
+        families, wordcloud_font_path = _find_fonts(language)
+
+    with ExitStack() as stack:
+        if enable_matplotlib:
+            assert families is not None
+            stack.enter_context(_patch_matplotlib(families))
+        if enable_wordcloud:
+            assert wordcloud_font_path is not None
+            stack.enter_context(_patch_wordcloud(wordcloud_font_path))
+        if enable_slugify:
+            stack.enter_context(_patch_report_slugify())
+        yield

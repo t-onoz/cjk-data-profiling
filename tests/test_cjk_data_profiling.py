@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from types import ModuleType
 from typing import Any, cast
 
@@ -162,6 +163,82 @@ def test_context_applies_and_restores_global_settings(
     assert original_wordcloud_font_path == module.wordcloud_module.FONT_PATH
 
 
+@pytest.mark.parametrize(
+    ("options", "matplotlib_enabled", "wordcloud_enabled", "slugify_enabled"),
+    [
+        ({"enable_matplotlib": False}, False, True, True),
+        ({"enable_wordcloud": False}, True, False, True),
+        ({"enable_slugify": False}, True, True, False),
+    ],
+)
+def test_context_can_disable_each_patch_independently(
+    monkeypatch: pytest.MonkeyPatch,
+    options: dict[str, bool],
+    matplotlib_enabled: bool,
+    wordcloud_enabled: bool,
+    slugify_enabled: bool,
+) -> None:
+    monkeypatch.setattr(
+        module, "_find_fonts", lambda language: (["Test CJK"], "/test.ttf")
+    )
+    report_module = cast(Any, ModuleType("report"))
+
+    def original_slugify(value: object) -> str:
+        return f"original-{value}"
+
+    report_module.slugify = original_slugify
+    monkeypatch.setattr(module, "_report_structure_module", lambda: report_module)
+
+    original_validator = matplotlib.rcParams.validate["font.sans-serif"]
+    original_sans_serif = list(matplotlib.rcParams["font.sans-serif"])
+    original_unicode_minus = matplotlib.rcParams["axes.unicode_minus"]
+    original_wordcloud_font_path = module.wordcloud_module.FONT_PATH
+
+    with module.cjk_data_profiling("ja", **options):
+        assert (matplotlib.rcParams["font.sans-serif"][0] == "Test CJK") is (
+            matplotlib_enabled
+        )
+        assert matplotlib.rcParams["axes.unicode_minus"] == (
+            False if matplotlib_enabled else original_unicode_minus
+        )
+        assert (module.wordcloud_module.FONT_PATH == "/test.ttf") is wordcloud_enabled
+        assert (report_module.slugify("x") == "78") is slugify_enabled
+
+    assert matplotlib.rcParams.validate["font.sans-serif"] is original_validator
+    assert matplotlib.rcParams["font.sans-serif"] == original_sans_serif
+    assert matplotlib.rcParams["axes.unicode_minus"] == original_unicode_minus
+    assert original_wordcloud_font_path == module.wordcloud_module.FONT_PATH
+    assert report_module.slugify is original_slugify
+
+
+def test_context_with_all_patches_disabled_skips_external_lookups(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected_lookup(*args: object, **kwargs: object) -> None:
+        raise AssertionError("patch lookup should not run")
+
+    monkeypatch.setattr(module, "_find_fonts", unexpected_lookup)
+    monkeypatch.setattr(module, "_report_structure_module", unexpected_lookup)
+
+    original_validator = matplotlib.rcParams.validate["font.sans-serif"]
+    original_sans_serif = list(matplotlib.rcParams["font.sans-serif"])
+    original_unicode_minus = matplotlib.rcParams["axes.unicode_minus"]
+    original_wordcloud_font_path = module.wordcloud_module.FONT_PATH
+
+    with module.cjk_data_profiling(
+        "ja",
+        enable_matplotlib=False,
+        enable_wordcloud=False,
+        enable_slugify=False,
+    ):
+        pass
+
+    assert matplotlib.rcParams.validate["font.sans-serif"] is original_validator
+    assert matplotlib.rcParams["font.sans-serif"] == original_sans_serif
+    assert matplotlib.rcParams["axes.unicode_minus"] == original_unicode_minus
+    assert original_wordcloud_font_path == module.wordcloud_module.FONT_PATH
+
+
 def test_context_restores_settings_after_body_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -202,6 +279,34 @@ def test_context_restores_settings_after_setup_exception(
 
     assert matplotlib.rcParams.validate["font.sans-serif"] is original_validator
     assert original_wordcloud_font_path == module.wordcloud_module.FONT_PATH
+
+
+def test_context_restores_matplotlib_when_wordcloud_setup_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        module, "_find_fonts", lambda language: (["Test CJK"], "/test.ttf")
+    )
+    original_validator = matplotlib.rcParams.validate["font.sans-serif"]
+    original_sans_serif = list(matplotlib.rcParams["font.sans-serif"])
+    original_unicode_minus = matplotlib.rcParams["axes.unicode_minus"]
+
+    @contextmanager
+    def failing_wordcloud_patch(font_path: str):
+        raise RuntimeError("WordCloud setup failed")
+        yield
+
+    monkeypatch.setattr(module, "_patch_wordcloud", failing_wordcloud_patch)
+
+    with (
+        pytest.raises(RuntimeError, match="WordCloud setup failed"),
+        module.cjk_data_profiling("ja"),
+    ):
+        pytest.fail("The context body must not run after setup failure")
+
+    assert matplotlib.rcParams.validate["font.sans-serif"] is original_validator
+    assert matplotlib.rcParams["font.sans-serif"] == original_sans_serif
+    assert matplotlib.rcParams["axes.unicode_minus"] == original_unicode_minus
 
 
 def test_nested_context_restores_outer_settings(

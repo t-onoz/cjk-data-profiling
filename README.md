@@ -51,6 +51,17 @@ with cjk_data_profiling("ja"):
     ...
 ```
 
+All compatibility patches are enabled by default. To opt out of one, pass its
+keyword-only switch. For example, leave WordCloud's default font unchanged:
+
+```python
+with cjk_data_profiling("ja", enable_wordcloud=False):
+    report = ProfileReport(dataframe)
+```
+
+The available switches are `enable_matplotlib`, `enable_wordcloud`, and
+`enable_slugify`.
+
 The context temporarily changes process-wide Matplotlib and WordCloud defaults,
 as well as the installed profiling package's report-structure DOM-ID helper.
 *Concurrent report generation from multiple threads in the same process is not
