@@ -87,8 +87,14 @@ class _ReportStructureModule(Protocol):
     slugify: Callable[..., str]
 
 
-def _dom_id_slugify(value: object) -> str:
-    """Encode a column name losslessly for use in a DOM identifier."""
+def _dom_id_slugify(
+    value: object, *_args: object, **_kwargs: object
+) -> str:
+    """Encode a string column name losslessly for use in a DOM identifier.
+
+    Extra arguments are deliberately ignored: a DOM identifier must always use
+    this encoding, even if the upstream slugify API later adds options.
+    """
 
     return str(value).encode("utf-8").hex()
 
@@ -111,11 +117,16 @@ def _report_structure_module() -> ModuleType | None:
         try:
             return import_module(module_name)
         except ModuleNotFoundError as error:
-            # Only treat the target profiling package being absent as optional.
-            # A missing dependency inside an installed package remains an error.
-            if module_name.startswith(f"{error.name}."):
+            # Only a missing top-level profiling package permits trying the
+            # other supported package. A missing internal module means its
+            # report structure changed, and must not silently disable patching.
+            package_name = module_name.partition(".")[0]
+            if error.name == package_name:
                 continue
-            raise
+            raise RuntimeError(
+                "The installed profiling package does not expose the expected "
+                f"report structure module: {module_name}."
+            ) from error
     return None
 
 
@@ -130,11 +141,19 @@ def _patch_report_slugify() -> Generator[None, None, None]:
 
     report_module = _report_structure_module()
     if report_module is None:
-        yield
-        return
+        raise RuntimeError(
+            "Slugify patching is enabled, but no supported profiling report "
+            "structure module was found. Install fg-data-profiling or "
+            "ydata-profiling, or pass enable_slugify=False."
+        )
 
     slugify_module = cast(_ReportStructureModule, report_module)
-    original_slugify = slugify_module.slugify
+    try:
+        original_slugify = slugify_module.slugify
+    except AttributeError as error:
+        raise RuntimeError(
+            "The profiling report module has no slugify reference to patch."
+        ) from error
     if not callable(original_slugify):
         raise RuntimeError("The profiling report module has no callable slugify.")
 

@@ -93,6 +93,22 @@ def test_report_slugify_patch_restores_after_body_exception(
     assert report_module.slugify is original_slugify
 
 
+def test_report_slugify_patch_rejects_missing_report_structure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(module, "_report_structure_module", lambda: None)
+
+    with (
+        pytest.raises(RuntimeError, match="Slugify patching is enabled"),
+        module._patch_report_slugify(),
+    ):
+        pytest.fail("The context body must not run without a report structure")
+
+
+def test_dom_id_slugify_ignores_future_slugify_options() -> None:
+    assert module._dom_id_slugify("温度", allow_unicode=True) == "e6b8a9e5baa6"
+
+
 def test_find_fonts_preserves_candidate_order_and_deduplicates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
