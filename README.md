@@ -2,8 +2,19 @@
 
 `cjk-data-profiling` is a context-manager package for generating
 `ydata-profiling` / `fg-data-profiling` reports with Japanese, Chinese, or
-Korean text. It temporarily configures CJK fonts for Matplotlib and WordCloud
-and prevents report interaction DOM-ID collisions caused by column names.
+Korean text.
+It works around the following issues in `fg-data-profiling`:
+
+- CJK text may not render correctly in Matplotlib/Seaborn plots
+  ([#1554](https://github.com/Data-Centric-AI-Community/fg-data-profiling/issues/1554),
+   [#1729](https://github.com/Data-Centric-AI-Community/fg-data-profiling/issues/1729)).
+- WordCloud may use a font without CJK glyphs
+  ([#1554](https://github.com/Data-Centric-AI-Community/fg-data-profiling/issues/1554),
+   [#1729](https://github.com/Data-Centric-AI-Community/fg-data-profiling/issues/1729)).
+- Interaction selectors can break when distinct column names generate the same HTML ID
+  ([#1875](https://github.com/Data-Centric-AI-Community/fg-data-profiling/issues/1875)).
+
+These workarounds are applied temporarily while the `cjk_data_profiling` context is active.
 
 ## Installation
 
