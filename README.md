@@ -60,9 +60,8 @@ with cjk_data_profiling("ja", enable_wordcloud=False):
 ```
 
 The available switches are `enable_matplotlib`, `enable_wordcloud`, and
-`enable_slugify`. Slugify patching is enabled by default and requires a
-supported profiling package. If you are only using the font settings without
-installing one, pass `enable_slugify=False`.
+`enable_slugify`. Slugify patching is enabled by default when a supported
+profiling package is installed; otherwise it is skipped with a warning.
 
 The context temporarily changes process-wide Matplotlib and WordCloud defaults,
 as well as the installed profiling package's report-structure DOM-ID helper.

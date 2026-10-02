@@ -54,6 +54,20 @@ def test_report_structure_module_falls_back_to_ydata(
     ]
 
 
+def test_report_structure_module_rejects_missing_internal_module(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def import_with_missing_internal_module(module_name: str) -> ModuleType:
+        error = ModuleNotFoundError()
+        error.name = "data_profiling.report.structure"
+        raise error
+
+    monkeypatch.setattr(module, "import_module", import_with_missing_internal_module)
+
+    with pytest.raises(RuntimeError, match="does not expose the expected"):
+        module._report_structure_module()
+
+
 def test_report_slugify_patch_is_scoped_and_restored(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -93,16 +107,16 @@ def test_report_slugify_patch_restores_after_body_exception(
     assert report_module.slugify is original_slugify
 
 
-def test_report_slugify_patch_rejects_missing_report_structure(
+def test_report_slugify_patch_warns_and_skips_when_profiling_is_not_installed(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     monkeypatch.setattr(module, "_report_structure_module", lambda: None)
 
-    with (
-        pytest.raises(RuntimeError, match="Slugify patching is enabled"),
-        module._patch_report_slugify(),
-    ):
-        pytest.fail("The context body must not run without a report structure")
+    with module._patch_report_slugify():
+        pass
+
+    assert "Slugify patching was skipped" in caplog.text
 
 
 def test_dom_id_slugify_ignores_future_slugify_options() -> None:

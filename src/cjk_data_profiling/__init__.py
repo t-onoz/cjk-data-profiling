@@ -13,6 +13,8 @@ import matplotlib
 import wordcloud.wordcloud as wordcloud_module  # type: ignore[reportMissingImports]
 from matplotlib import font_manager
 
+logger = logging.getLogger(__name__)
+
 Language = Literal["ja", "zh-cn", "zh-tw", "ko", "mixed"]
 
 
@@ -141,11 +143,13 @@ def _patch_report_slugify() -> Generator[None, None, None]:
 
     report_module = _report_structure_module()
     if report_module is None:
-        raise RuntimeError(
-            "Slugify patching is enabled, but no supported profiling report "
-            "structure module was found. Install fg-data-profiling or "
-            "ydata-profiling, or pass enable_slugify=False."
+        logger.warning(
+            "Slugify patching was skipped because neither fg-data-profiling "
+            "nor ydata-profiling is installed. Install a supported profiling "
+            "package to enable it."
         )
+        yield
+        return
 
     slugify_module = cast(_ReportStructureModule, report_module)
     try:
